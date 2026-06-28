@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS 18 Volume Gyro Control</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        /* Mockup iPhone 17 Pro Max */
+        .iphone-frame {
+            width: 393px;
+            height: 852px;
+            background: #121212;
+            border: 12px solid #2c2c2e;
+            border-radius: 55px;
+            position: relative;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+        }
+
+        /* Dynamic Island */
+        .dynamic-island {
+            width: 110px;
+            height: 30px;
+            background: #000;
+            border-radius: 20px;
+            margin: 0 auto;
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* UI Indikator Volume ala iOS */
+        .volume-hud {
+            position: absolute;
+            left: 15px;
+            top: 150px;
+            width: 24px;
+            height: 160px;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            transition: transform 0.1s ease;
+        }
+
+        .volume-bar {
+            width: 100%;
+            height: 50%; /* Nilai awal default 50% */
+            background: #fff;
+            border-radius: 12px;
+            transition: height 0.1s ease;
+        }
+
+        /* Tampilan Tengah Layar */
+        .screen-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+        }
+
+        .status-tilt {
+            font-size: 14px;
+            color: #8e8e93;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .volume-number {
+            font-size: 72px;
+            font-weight: 200;
+            margin-bottom: 5px;
+        }
+
+        .instruction {
+            font-size: 12px;
+            color: #ff3b30;
+            max-width: 80%;
+            line-height: 1.4;
+        }
+
+        /* Home Indicator (Garis bawah iPhone) */
+        .home-indicator {
+            width: 140px;
+            height: 5px;
+            background: #fff;
+            border-radius: 10px;
+            margin: 0 auto 5px auto;
+        }
+
+        /* Tombol Minta Izin Sensor */
+        .btn-permission {
+            background: #007aff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="iphone-frame">
+        <div class="dynamic-island" id="island"></div>
+
+        <div class="volume-hud" id="hud">
+            <div class="volume-bar" id="v-bar"></div>
+        </div>
+
+        <div class="screen-content">
+            <p class="status-tilt" id="tilt-label">Sudut HP: 0°</p>
+            <h1 class="volume-number" id="v-num">50%</h1>
+            <p class="instruction">
+                Sentuhan dinonaktifkan. Dongakkan HP ke atas untuk menaikkan volume, tundukkan ke bawah untuk menurunkan.
+            </p>
+            <button class="btn-permission" id="btn-init">Aktifkan Sensor Gyro</button>
+        </div>
+
+        <div class="home-indicator"></div>
+    </div>
+
+    <script>
+        let currentVolume = 50;
+        const vBar = document.getElementById('v-bar');
+        const vNum = document.getElementById('v-num');
+        const tiltLabel = document.getElementById('tilt-label');
+        const island = document.getElementById('island');
+        const hud = document.getElementById('hud');
+        const btnInit = document.getElementById('btn-init');
+
+        function handleOrientation(event) {
+            // Beta merepresentasikan kemiringan depan-ke-belakang (-180 sampai 180)
+            let beta = event.beta; 
+            if (beta === null) return;
+
+            // Kita asumsikan posisi genggam normal memegang HP adalah bersudut ~45 derajat.
+            // Jika lebih dari 55 derajat (dongak), volume naik. Jika kurang dari 35 derajat (tunduk), volume turun.
+            let targetAngle = 45;
+            let tolerance = 8; 
+            let diff = beta - targetAngle;
+
+            tiltLabel.innerText = `Sudut HP: ${Math.round(beta)}°`;
+
+            if (Math.abs(diff) > tolerance) {
+                // Semakin miring, perubahan volume semakin ngebut
+                let changeSpeed = diff > 0 ? 0.5 : -0.5;
+                
+                currentVolume += changeSpeed;
+                // Batasi antara 0 - 100
+                currentVolume = Math.max(0, Math.min(100, currentVolume));
+                
+                updateUI();
+            }
+        }
+
+        function updateUI() {
+            let displayVol = Math.round(currentVolume);
+            vBar.style.height = displayVol + '%';
+            vNum.innerText = displayVol + '%';
+
+            // Animasi feedback ala iOS: Dynamic Island sedikit melebar saat volume berubah ekstrem
+            if (displayVol === 100 || displayVol === 0) {
+                island.style.width = "140px";
+                island.style.background = "#ff3b30"; // Berubah merah kalau mentok
+                hud.style.transform = "scaleX(1.3)";
+            } else {
+                island.style.width = "110px";
+                island.style.background = "#000";
+                hud.style.transform = "scaleX(1)";
+            }
+        }
+
+        // Request permission untuk perangkat iOS modern (iOS 13+)
+        btnInit.addEventListener('click', () => {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                            btnInit.style.display = 'none';
+                        } else {
+                            alert('Akses Gyroscope ditolak!');
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                // Untuk Android atau browser desktop yang mendukung simulasi sensor dev tools
+                window.addEventListener('deviceorientation', handleOrientation);
+                btnInit.style.display = 'none';
+                alert('Sensor diaktifkan (Jika di Desktop, gunakan Inspect Element > Kelola Sensor untuk tes)');
+            }
+        });
+    </script>
+</body>
+</html>
